@@ -1,147 +1,107 @@
-import React from 'react';
+import React, {Component} from 'react';
 import ReactDOM from 'react-dom';
+import firebase from './firebase.js';
 import './index.css';
 
-function Square(props){
-  return (
-    <button className="square" onClick={props.onClick}>
-      {props.value}
-    </button>
-    );
-}
-
-class Board extends React.Component {
-
-  renderSquare(i) {
-    return (<Square 
-      value={this.props.squares[i]} 
-      onClick={() => this.props.onClick(i)}
-      />);
-  }
-
-  render() {
-
-    return (
-      <div>
-        <div className="board-row">
-          {this.renderSquare(0)}
-          {this.renderSquare(1)}
-          {this.renderSquare(2)}
-        </div>
-        <div className="board-row">
-          {this.renderSquare(3)}
-          {this.renderSquare(4)}
-          {this.renderSquare(5)}
-        </div>
-        <div className="board-row">
-          {this.renderSquare(6)}
-          {this.renderSquare(7)}
-          {this.renderSquare(8)}
-        </div>
-      </div>
-    );
-  }
-}
-
-class Game extends React.Component {
+class App extends Component{
   constructor(){
     super();
     this.state = {
-      history: [{
-        squares: Array(9).fill(null),
-      }],
-      stepNumber: 0,
-      xIsNext: true,
-    };
+      currentItem: '',
+      username: '',
+      items: []
+    } 
+    this.handleChange = this.handleChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
   }
 
-  handleClick(i){
-    const history = this.state.history.slice(0, this.state.stepNumber + 1);
-    const current = history[history.length - 1];
-    const squares = current.squares.slice();
-
-    if(calculateWinner(squares) || squares[i]){
-      return;
-    }
-    squares[i] = this.state.xIsNext ? 'X' : 'O';
+  handleChange(e){
     this.setState({
-      history: history.concat([{
-        squares: squares
-      }]),
-      stepNumber: history.length,
-      xIsNext: !this.state.xIsNext
+      [e.target.name]: e.target.value
     });
   }
 
-  jumpTo(step){
-    this.setState({
-      stepNumber: step,
-      xIsNext: (step % 2) === 0,
-    });
-  }
-
-  render() {
-    const history = this.state.history;
-    const current = history[this.state.stepNumber];
-    const winner = calculateWinner(current.squares);
-
-    const moves = history.map((step, move) => {
-      const desc = move ?
-        'Move #' + move :
-        'Game start';
-      return (
-        <li key={move}><a href="" onClick={() => this.jumpTo(move)}>{desc}</a></li>
-        );
-    });
-
-    let status;
-    if(winner){
-      status = 'Winner: ' + winner;
-    }else{
-      status = 'Next player: ' + (this.state.xIsNext ? 'X' : 'O');
+  handleSubmit(e){
+    e.preventDefault(); //prevent default behavior of the form - refreshing when you hit submit
+    const itemsRef = firebase.database().ref('items');
+    const item = {
+      title: this.state.currentItem,
+      user: this.state.username
     }
+    itemsRef.push(item);
+    this.setState({
+      currentItem: '',
+      username: ''
+    });
+  }
 
+  componentDidMount(){
+    const itemsRef = firebase.database().ref('items');
+    itemsRef.on('value', (snapshot) => {
+      let items = snapshot.val();
+      let newState = [];
+      for (let item in items){
+        newState.push({
+          id: item,
+          title: items[item].title,
+          user: items[item].user
+        });
+      }
+      this.setState({
+        items: newState
+      });
+    });
+  }
+
+  removeItem(itemId){
+    const itemsRef = firebase.database().ref(`/items/${itemId}`);
+    itemsRef.remove();
+  }
+
+  render(){
     return (
-      <div className="game">
-        <div className="game-board">
-          <Board 
-            squares = {current.squares}
-            onClick = {(i) => this.handleClick(i)}
-          />
+      <div className='app'>
+        
+        <header>
+          <div className='wrapper'>
+            <h1>Demo</h1>
+          </div>
+        </header>
+
+        <div className='container'>
+          <section className='add-item'>
+            <form onSubmit={this.handleSubmit}>
+              <input type='text' name='username' placeholder='What is your name?' onChange={this.handleChange} value={this.state.username} />
+              <input type='text' name='currentItem' placeholder='What are you bringing?' onChange={this.handleChange} value={this.state.currentItem} />
+              <button>Add Item</button>
+            </form>
+          </section>
+          <section className='display-item'>
+            <div className='wrapper'>
+              <ul>
+                {this.state.items.map((item) => {
+                  return(
+                    <li key={item.id}>
+                      <h3>{item.title}</h3>
+                      <p>brought by: {item.user}</p>
+                      <button onClick={() => this.removeItem(item.id)}>Remove Item</button>
+                    </li>
+                    )
+                })}
+              </ul>
+            </div>
+          </section>
         </div>
-        <div className="game-info">
-          <div>{status}</div>
-          <ol>{moves}</ol>
-        </div>
+
       </div>
-    );
+      );
   }
 }
 
 // ========================================
+export default App;
 
-ReactDOM.render(
-  <Game />,
-  document.getElementById('root')
-);
+ReactDOM.render(<App />, document.getElementById('root'));
 
-function calculateWinner(squares){
-  const lines = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6],
-  ];
 
-  for (let i=0; i<lines.length; i++){
-    const [a,b,c] = lines[i];
-    if(squares[a] && squares[a] === squares[b] && squares[a] === squares[c]){
-      return squares[a];
-    }
-  }
-  return null;
-}
+
